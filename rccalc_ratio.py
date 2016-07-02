@@ -16,7 +16,6 @@ import sys
 import tvtk
 import os
 # comment 1
-#comment 2
 from getfem import *
 #from stl import mesh
 import re
