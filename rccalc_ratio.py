@@ -23,6 +23,8 @@ import shutil
 import time
 import shlex
 from threading import Timer
+from easyprocess import EasyProcess
+#import killableprocess as kpr
 #from easyprocess import Proc
 
 #import resource
@@ -48,9 +50,11 @@ def process_run(cmd, timeout_sec):
   proc = subprocess.Popen(shlex.split(cmd),shell=True,stdout=subprocess.PIPE, stderr=subprocess.PIPE)
   timeout = {"value": False}
   timer = Timer(timeout_sec, kill_proc, [proc, timeout])
-  timer.start()
-  stdout1, stderr1 = proc.communicate()
-  timer.cancel()
+  try:
+      timer.start()
+      stdout1, stderr1 = proc.communicate()
+  finally:
+      timer.cancel()
   return proc, proc.returncode, stdout1, stderr1, timeout["value"]
 #  return proc.returncode, stdout.decode("utf-8"), stderr.decode("utf-8"), timeout["value"]
 
@@ -881,10 +885,13 @@ def inlist(a,b,index):
 #      Main program
 #
 number_of_ribs = 32
+number_of_ribs = 17
+#number_of_ribs = 8
 plate_radius =    17.0    # mm
 plate_thickness = 0.7     # mm
-rib_width = 0.3           # mm
-rib_thickness = 2.1     # mm
+rib_width = 0.6           # mm
+rib_width = 1.0*16/16           # mm
+rib_thickness = 1.4     # mm
 
 rib_length = 0.5*plate_radius
 #rib_length = 0.9*plate_radius
@@ -894,6 +901,9 @@ rib_boss_length = 0.5*rib_length
 #rib_boss_length = 0.1*rib_length
 
 rib_boss_width = 1.0*rib_width
+flare_len = plate_radius - rib_length/2.0-rib_radius
+flare_center_r = plate_radius - flare_len/2.0
+flare_angle = 360.0/number_of_ribs/2.0*3.0
 
 solfolder = "solution_folder"
 fileprefix = "rplate"
@@ -907,10 +917,19 @@ plate = cylinder(r=plate_radius, h=plate_thickness, center=True, segments=60)
 rib = cube([rib_length,rib_width,rib_thickness],center=True)
 rib_boss = cube([rib_boss_length,rib_boss_width,rib_thickness],center=True)
 rib_boss2 = cube([rib_boss_length/2.0,rib_boss_width*2.0,rib_thickness],center=True)
+flare = cube([flare_len,rib_width,rib_thickness])
+flare = Translate(y=-rib_width/2.0, z =-rib_thickness/2.0) (flare)
+flare_up = Rotate(z=flare_angle) (flare)
+flare_down = Rotate(z=-flare_angle) (flare)
+flare_up = Translate(x=flare_center_r-rib_radius-flare_len/2.0) ( flare_up )
+flare_down = Translate(x=flare_center_r-rib_radius-flare_len/2.0) ( flare_down )
 #rib_boss2 = Translate(x=rib_length/6.0) (rib_boss2)
 rib_plus_boss.append(rib)
 #rib_plus_boss.append(rib_boss)
 rib_plus_boss.append(rib_boss2)
+#rib_plus_boss.append(flare_up)
+#rib_plus_boss.append(flare_down)
+
 rib_plus_boss = Union()(*rib_plus_boss)
 rib_plus_boss = Translate(x=(rib_radius), z=(rib_thickness+plate_thickness)/2.0-0.05) (rib_plus_boss)
 ribbed_plate = []
@@ -971,12 +990,31 @@ sys.stdout.flush()
 #stl_to_mesh_tetgen_meshing_cmd = "tetgen.exe -pQgqa2.0 " + stl_file 
 stl_to_mesh_tetgen_meshing_cmd = "tetgen.exe -pgqa2.0 " + stl_file 
 
-pr, returncode, stdoutdata, stderrdata, tmoret = process_run(stl_to_mesh_tetgen_meshing_cmd, 240)
+pr = EasyProcess(stl_to_mesh_tetgen_meshing_cmd).call(timeout=10)
+returncode = pr.return_code
+stdoutdata =  pr.stdout
+stderrdata =  pr.stderr
+
+#pr, returncode, stdoutdata, stderrdata, tmoret = process_run(stl_to_mesh_tetgen_meshing_cmd, 1)
 #  return proc.returncode, stdout.decode("utf-8"), stderr.decode("utf-8"), timeout["value"]
+#pr = kpr.Popen(stl_to_mesh_tetgen_meshing_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+#pr = kpr.Popen(stl_to_mesh_tetgen_meshing_cmd)
+#pr.wait(timeout=2.0)
+
+#stdoutdat, stderrdat = pr.communicate()
 tetgen_end_time_tick = time.time()
+#returncode = pr.returncode
 
 status = returncode
 print stdoutdata
+
+if (status != 0 ):
+#    print "stdoutdata=", stdoutdata
+    aborted_run = True
+#  
+    print("stl to tetgen mesh failed !")
+    print
+    sys.exit("Stopping here")
 
 if (status != 0 ):
 #    print "stdoutdata=", stdoutdata
@@ -985,18 +1023,11 @@ if (status != 0 ):
     print
     sys.exit("Stopping here")
 
-if (status != 0 ):
-#    print "stdoutdata=", stdoutdata
-    aborted_run = True
-    print("stl to tetgen mesh failed !")
-    print
-    sys.exit("Stopping here")
-
 print'done\n'
 sys.stdout.flush()
 print "ending tetgen at ", time.asctime(time.localtime(tetgen_end_time_tick))
 
-pr.terminate()
+#pr.terminate()
 
 # converting .mesh to .msh file 
 
@@ -1138,10 +1169,10 @@ bot_pts = m.pid_in_faces(fbot)
 #
 #     first find the coma deflection
 #
-commonfactor = 3.0
+commonfactor = 1.0
 weight1 = 0.0  # actuator force in gr
 #magfactor2 = 800.0*0.3*0.5*2.0
-magfactor2 = 3.0
+magfactor2 = 1.0
 # piston pressure (for weight1 gr) in mN/mm^2
 ppiston = -weight1*commonfactor*1.0e-3*9.8/(math.pi*plate_radius*plate_radius)*1000.0   
 #
@@ -1201,8 +1232,8 @@ dzmin_coma,dzmax_coma = calculix_extreme_z("calculix_coma_run.dat")
 #
 #     second find the uniform deflection
 #
-commonfactor = 3.0
-weight1 = 50.0  # actuator force in gr
+commonfactor = 1.0
+weight1 = 25.0  # actuator force in gr
 #magfactor2 = 800.0*0.3*0.5*2.0
 magfactor2 = 0.0
 # piston pressure (for weight1 gr) in mN/mm^2
@@ -1265,11 +1296,13 @@ print "*********************************************************"
 print "extreme coma dz = ", dzmin_coma,dzmax_coma
 print "extreme uniform dz = ", dzmin_p,dzmax_p
 
-avgc = (abs(dzmin_coma)+abs(dzmax_coma))/2.0
+avgc = (abs(dzmin_coma)+abs(dzmax_coma))/1.0
 maxdzp = abs(dzmin_p)
 print
 ratio_coma = avgc/maxdzp
 print "coma cont. ratio = ", ratio_coma
+print "coma decrease factor = ",ratio_coma/0.0827*100.0/2.0, "%"
+print "coma power = ",3.0*ratio_coma, "diopters"
 print "*********************************************************"
 
 
