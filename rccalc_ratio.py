@@ -143,21 +143,12 @@ returncode = pr.return_code
 stdoutdata =  pr.stdout
 stderrdata =  pr.stderr
 
-#pr, returncode, stdoutdata, stderrdata, tmoret = process_run(stl_to_mesh_tetgen_meshing_cmd, 1)
-#  return proc.returncode, stdout.decode("utf-8"), stderr.decode("utf-8"), timeout["value"]
-#pr = kpr.Popen(stl_to_mesh_tetgen_meshing_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-#pr = kpr.Popen(stl_to_mesh_tetgen_meshing_cmd)
-#pr.wait(timeout=2.0)
-
-#stdoutdat, stderrdat = pr.communicate()
 tetgen_end_time_tick = time.time()
-#returncode = pr.returncode
 
 status = returncode
 print stdoutdata
 
 if (status != 0 ):
-#    print "stdoutdata=", stdoutdata
     aborted_run = True
 #  
     print("stl to tetgen mesh failed !")
@@ -165,7 +156,6 @@ if (status != 0 ):
     sys.exit("Stopping here")
 
 if (status != 0 ):
-#    print "stdoutdata=", stdoutdata
     aborted_run = True
     print("stl to tetgen mesh timeout !")
     print
@@ -174,8 +164,6 @@ if (status != 0 ):
 print'done\n'
 sys.stdout.flush()
 print "ending tetgen at ", time.asctime(time.localtime(tetgen_end_time_tick))
-
-#pr.terminate()
 
 # converting .mesh to .msh file 
 
@@ -220,9 +208,13 @@ clean_inp_file("meshsolid_t.inp","meshsolid.inp")
 print'done\n'
 
 ##################################################################
+#
+#   here read mesh with getfem interface to find boundary pts
+#
+##################################################################
 
+sys.stdout.write('importing mesh ... ')
 m=Mesh('import','gmsh','meshsolid.msh')
-#m=Mesh('import','gmsh','rplate1.msh')
 print 'done!'
 
 # first collect the mesh points 
@@ -234,8 +226,6 @@ print "mesh has ", num_el, "tetrahedra"
 # find the centroid coordinates for all of the mesh points
 
 centroids = find_solid_centroids(m)
-
-
 #
 #       boundary selection
 #
@@ -272,7 +262,6 @@ fnor1 = m.normal_of_faces(fbot)
 #  return(ct,ta,fac_pts)
 #
 bottom_facet_centroids,area_facets,bot_el_pts,pcp = find_solid_bottom_facet_centroids1(m,fbot,-plate_thickness/2.0,1.0e-5)
-
 #
 #   Here identify and refine the edge BC 
 #   to make sure that thet are outer faces.
@@ -291,11 +280,11 @@ for index in range(0,len(fside1[0])):
  
 fside3 = array(fside2)
 fside4 = fside3.transpose()
-
+#
 #  here are the point IDs for the side boundary
 #
 side_pts_ids = m.pid_in_faces(fside4)
-
+#
 fnor2 =  m.normal_of_faces(fside4)
 fnor4 =  m.normal_of_faces(fbot)
 #
@@ -313,14 +302,15 @@ fix_side_point_ids = m.pid_in_faces(fside4)
 #  of adjacent elements
 #
 bot_pts = m.pid_in_faces(fbot)
-
+##################################################################
 #
 #     first find the coma deflection
 #
 commonfactor = 1.0
-weight1 = 0.0  # actuator force in gr
-#magfactor2 = 800.0*0.3*0.5*2.0
 magfactor2 = 1.0
+#
+weight1 = 0.0  # actuator force in gr
+#
 # piston pressure (for weight1 gr) in mN/mm^2
 ppiston = -weight1*commonfactor*1.0e-3*9.8/(math.pi*plate_radius*plate_radius)*1000.0   
 #
@@ -348,8 +338,6 @@ plot_cload(cmsh,20)
 # 
 #      now assemble the calculix input deck and files 
 #
-# 
-#E=1.84  # N/mm^2 PDMS Young modulus (Sylgard 184)
 matname = "PDMS"
 E=1.0e3  # mN/mm^2 PDMS Young modulus (Sylgard 184)
 Nu=0.3
@@ -359,9 +347,9 @@ sys.stdout.write('assembling coma input deck ... ')
 sys.stdout.flush()
 assemble_input_deck(num_el,matname,E,Nu,calculix_input_deck,abaqusmeshfile,side_pts_ids,bottom_pts_ids,bottom_pts_cload)
 print'done\n'
-
+#
 # here run the solver
-
+#
 calculix_jobname = "calculix_coma_run"
 sys.stdout.write('running calculix ... ')
 sys.stdout.flush()
@@ -370,20 +358,19 @@ calculix_solve_cmd = "ccx -i " + calculix_jobname
 p = subprocess.Popen(calculix_solve_cmd,shell=True,stdout=subprocess.PIPE)
 result = p.communicate()[0]
 print'done\n'
-
 print result
-
-
+#
 # find the extreme dz displacement for uniform pressure
-
+#
 dzmin_coma,dzmax_coma = calculix_extreme_z("calculix_coma_run.dat")
 #
 #     second find the uniform deflection
 #
 commonfactor = 1.0
-weight1 = 25.0  # actuator force in gr
-#magfactor2 = 800.0*0.3*0.5*2.0
 magfactor2 = 0.0
+#
+weight1 = 25.0  # actuator force in gr
+#
 # piston pressure (for weight1 gr) in mN/mm^2
 ppiston = -weight1*commonfactor*1.0e-3*9.8/(math.pi*plate_radius*plate_radius)*1000.0   
 #
@@ -404,32 +391,30 @@ print "ppiston =",ppiston,"mN/mm^2, a0*rad =",a0*plate_radius, "mN/mm^2"
 press_centroid,pmsh = pressure_at_centroids(bottom_facet_centroids,ppiston,a0)
 force_centroid = force_at_centroids(press_centroid,bottom_facet_centroids,area_facets)
 plot_pressure(pmsh,20)
-
+#
 bottom_pts_ids,bottom_pts_cload = find_solid_bottom_facet_cloads(m,fbot,force_centroid)
 cmsh = force_at_bottom_points(m,bottom_pts_ids,bottom_pts_cload)
 plot_cload(cmsh,20)
 # 
 #      now assemble the calculix input deck and files 
 #
-# 
-#E=1.84  # N/mm^2 PDMS Young modulus (Sylgard 184)
 matname = "PDMS"
 E=1.0e3  # mN/mm^2 PDMS Young modulus (Sylgard 184)
 Nu=0.3
-
+#
 calculix_input_deck = "calculix_uni_run.inp"
 sys.stdout.write('assembling uniform pressure input deck ... ')
 sys.stdout.flush()
 assemble_input_deck(num_el,matname,E,Nu,calculix_input_deck,abaqusmeshfile,side_pts_ids,bottom_pts_ids,bottom_pts_cload)
 print'done\n'
-
+#
 # here run the solver
-
+#
 calculix_jobname = "calculix_uni_run"
 sys.stdout.write('running calculix ... ')
 sys.stdout.flush()
 calculix_solve_cmd = "ccx -i " + calculix_jobname
-#p = subprocess.call(calculix_solve_cmd,shell=True)
+#
 p = subprocess.Popen(calculix_solve_cmd,shell=True,stdout=subprocess.PIPE)
 result = p.communicate()[0]
 print'done\n'
