@@ -4,22 +4,6 @@ Created on Sun Jul 03 00:11:30 2016
 
 @author: cmast
 """
-#import killableprocess as kpr
-#from easyprocess import Proc
-
-#import resource
-#import memory_profiler
-
-#def run(cmd, timeout_sec):
-#  proc = subprocess.Popen(shlex.split(cmd), stdout=subprocess.PIPE, 
-#    stderr=subprocess.PIPE)
-#  kill_proc = lambda p: p.kill()
-#  timer = Timer(timeout_sec, kill_proc, [proc])
-#  try:
-#    timer.start()
-#    stdout,stderr = proc.communicate()
-#  finally:
-#    timer.cancel()
 
 def kill_proc(proc, timeout):
   timeout["value"] = True
