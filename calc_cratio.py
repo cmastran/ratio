@@ -473,7 +473,16 @@ print result
 # find the extreme dz displacement for uniform pressure
 #
 
-(dzmin_coma, dzmax_coma) = calculix_extreme_z('calculix_coma_run.dat')
+(dzmin_coma, dzmax_coma) = calculix_extreme_dz('calculix_coma_run.dat')
+
+(nn,zdata_coma) = calculix_dz('calculix_coma_run.dat')
+(xcoor,ycoor,coma_surf_dz) = surface_dz(P,bot_pts,zdata_coma)
+
+# plotting coma deflection
+
+plot_dz(xcoor,ycoor,coma_surf_dz,20.0)
+
+
 
 #
 #     second find the uniform deflection
@@ -570,7 +579,12 @@ print result
 
 # find the extreme dz displacement for uniform pressure
 
-(dzmin_p, dzmax_p) = calculix_extreme_z('calculix_uni_run.dat')
+(dzmin_p, dzmax_p) = calculix_extreme_dz('calculix_uni_run.dat')
+
+(nn,zdata) = calculix_dz('calculix_uni_run.dat')
+(xcoor,ycoor,surf_dz) = surface_dz(P,bot_pts,zdata)
+
+plot_dz(xcoor,ycoor,surf_dz,20.0)
 
 print '*********************************************************'
 print 'extreme coma dz = ', dzmin_coma, dzmax_coma
@@ -584,6 +598,9 @@ print 'coma cont. ratio = ', ratio_coma
 print 'coma decrease factor = ', ratio_coma / 0.0827 * 100.0 / 2.0, '%'
 print 'coma power = ', 3.0 * ratio_coma, 'diopters'
 print '*********************************************************'
+
+
+
 
 sys.exit('Stopping here')
 

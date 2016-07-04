@@ -80,6 +80,34 @@ def  plot_cload(pm,size):
     plt.show()
     return()  
     
+      
+def  plot_dz(x,y,z,size):
+   
+    plt.figure(figsize=(size,size/1.25))
+    # define grid.
+    npts = len(z)
+#    for jj in range(0,len(pm)):
+#        x.append(pm[jj][0])
+#        y.append(pm[jj][1])
+#        z.append(pm[jj][3])
+#        
+    xi = np.linspace(-17,17,200)
+    yi = np.linspace(-17,17,200)
+    # grid the data.
+    zi = griddata((x, y), z, (xi[None,:], yi[:,None]), method='cubic')
+    # contour the gridded data, plotting dots at the randomly spaced data points.
+    CS = plt.contour(xi,yi,zi,21,linewidths=0.5,colors='k')
+    CS = plt.contourf(xi,yi,zi,21,cmap=plt.cm.jet)
+    plt.colorbar() # draw colorbar
+    # plot data points.
+    plt.scatter(x,y,marker='o',c='b',s=5)
+    plt.xlim(-20,20)
+    plt.ylim(-20,20)
+    plt.title('griddata cload (%d points)' % npts)
+    plt.show()
+    return()    
+    
+    
 #    function to make geo file
 #
 def make_geo_file(filename):
@@ -330,7 +358,7 @@ def clean_inp_file(infile,outfile):
    return 
    
    
-def calculix_extreme_z(infile):
+def calculix_extreme_dz(infile):
    #
    #    read the result calculix data file
    #
@@ -393,6 +421,71 @@ def calculix_extreme_z(infile):
            maxdz = dz[ii]
    #
    return(mindz,maxdz)    
+   
+
+  
+def calculix_dz(infile):
+   #
+   #    read the result calculix data file
+   #
+   ii = 0
+   line_list = []
+   nn = []
+   dx = []
+   dy = []
+   dz = []
+   f = open(infile)
+   line_list.append(f.readline())
+   while len(line_list[ii])!=0 :
+        line_list.append(f.readline())
+        ii = ii+1
+   f.close()
+   num_lines = ii # this is the end of the file
+   #
+   #  now scan the lines and read nodes
+   #
+   
+   sub = "displacements (vx,vy,vz)"
+   for ii in range(0,len(line_list)):
+       text = line_list[ii]
+       if sub in text:
+           nodeline = ii
+      
+   sub = "stresses"
+   for ii in range(0,len(line_list)):
+       text = line_list[ii]
+       if sub in text:
+           endnodeline = ii
+   
+   numnodes = endnodeline - nodeline - 3
+   
+   j = 0
+   for ii in range(nodeline+2,endnodeline-1):
+       ml =  line_list[ii]
+       ml =  ml.split()
+       nn.append(int(ml[0]))
+       dx.append(float(ml[1]))
+       dy.append(float(ml[2]))
+       dz.append(float(ml[3]))
+       j = j+1
+    #
+   return(nn,dz)    
+    
+def surface_dz(p,bot_pts,zdata):
+ 
+   xc =[]
+   yc = []
+   dz = []
+   for ii in range(0,len(bot_pts)):
+       nng = bot_pts[ii]
+       x = p[0][nng]
+       y = p[1][nng]
+       z = p[2][nng]
+       dz.append(zdata[nng])
+       xc.append(x)
+       yc.append(y)
+    #
+   return(xc,yc,dz)    
    
    
    
