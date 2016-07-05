@@ -46,7 +46,7 @@ refractive_index = 1.47
 
 matname = 'PDMS'
 E = 1.1e3  #  PDMS Young modulus (Sylgard 184)
-Nu = 0.4
+Nu = 0.421
 
 #
 number_of_ribs = 32
