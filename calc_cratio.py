@@ -45,7 +45,7 @@ refractive_index = 1.47
 
 
 matname = 'PDMS'
-E = 1.5e3  #  PDMS Young modulus (Sylgard 184)
+E = 1.1e3  #  PDMS Young modulus (Sylgard 184)
 Nu = 0.4
 
 #
@@ -58,7 +58,7 @@ plate_radius = 15.0  # mm
 plate_thickness = 1.0  # mm
 rib_width = 0.9  # mm
 rib_width = 0.95  # mm
-rib_thickness = 2.0  # mm
+rib_thickness = 1.8 # mm
 
 rib_length = 0.585 * plate_radius
 
@@ -560,9 +560,9 @@ plot_cload(cmsh, 20,plate_radius)
 #      now assemble the calculix input deck and files
 #
 
-matname = 'PDMS'
-E = 1.0e3  # mN/mm^2 PDMS Young modulus (Sylgard 184)
-Nu = 0.3
+#matname = 'PDMS'
+#E = 1.0e3  # mN/mm^2 PDMS Young modulus (Sylgard 184)
+#Nu = 0.3
 
 #
 
@@ -636,7 +636,7 @@ ratio_coma = avgc / maxdzp
 print 'coma coeff in microns = ', coma_fitlist[8], "microns" 
 print 'coma cont. ratio = ', ratio_coma
 print 'coma decrease factor = ', ratio_coma / 0.0827 * 100.0 / 2.0, '%'
-print 'coma power = ', 3.0 * ratio_coma, 'diopters'
+#print 'coma power = ', 3.0 * ratio_coma, 'diopters'
 print 'uniform lens power = ', lens_power, 'diopters'
 print 'uniform lens power2 = ', lens_power2, 'diopters'
 print 'coma lens power = ', coma_lens_power, 'diopters'
