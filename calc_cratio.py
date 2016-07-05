@@ -3,6 +3,7 @@
 #
 #   ribbed plate python automated FEM
 #
+#autoreload
 
 from solid import *
 from scad import *
@@ -22,6 +23,7 @@ import re
 import shutil
 import time
 import shlex
+import opticspy
 
 from triangle import *
 from scipy.interpolate import griddata
@@ -39,16 +41,24 @@ import rccalc_lib
 #      Main program
 #
 
+refractive_index = 1.47
+
+
+matname = 'PDMS'
+E = 1.5e3  #  PDMS Young modulus (Sylgard 184)
+Nu = 0.4
+
+#
 number_of_ribs = 32
 number_of_ribs = 16
 
 # number_of_ribs = 8
 
-plate_radius = 17.0  # mm
-plate_thickness = 0.7  # mm
-rib_width = 0.7  # mm
+plate_radius = 15.0  # mm
+plate_thickness = 1.0  # mm
+rib_width = 0.9  # mm
 rib_width = 0.95  # mm
-rib_thickness = 1.4  # mm
+rib_thickness = 2.0  # mm
 
 rib_length = 0.585 * plate_radius
 
@@ -71,6 +81,10 @@ solfolder = 'solution_folder'
 fileprefix = 'rplate'
 
 run_aborted = False
+
+#Z = opticspy.zernike.Coefficient(Z11=1) 
+#Z.zernikesurface()
+
 
 #
 #   make the plate here
@@ -421,20 +435,20 @@ print 'ppiston =', ppiston, 'mN/mm^2, a0*rad =', a0 * plate_radius, \
         ppiston, a0)
 force_centroid = force_at_centroids(press_centroid,
                                     bottom_facet_centroids, area_facets)
-plot_pressure(pmsh, 20)
+plot_pressure(pmsh, 20,plate_radius)
 
 (bottom_pts_ids, bottom_pts_cload) = find_solid_bottom_facet_cloads(m,
         fbot, force_centroid)
 cmsh = force_at_bottom_points(m, bottom_pts_ids, bottom_pts_cload)
-plot_cload(cmsh, 20)
+plot_cload(cmsh, 20, plate_radius)
 
 #
 #      now assemble the calculix input deck and files
 #
 
-matname = 'PDMS'
-E = 1.0e3  # mN/mm^2 PDMS Young modulus (Sylgard 184)
-Nu = 0.3
+#matname = 'PDMS'
+#E = 1.0e3  #  PDMS Young modulus (Sylgard 184)
+#Nu = 0.3
 
 calculix_input_deck = 'calculix_coma_run.inp'
 sys.stdout.write('assembling coma input deck ... ')
@@ -480,10 +494,19 @@ print result
 
 # plotting coma deflection
 
-plot_dz(xcoor,ycoor,coma_surf_dz,20.0)
+plot_dz(xcoor,ycoor,coma_surf_dz,20.0,plate_radius)
 
+# now make the fit 
+# first construct a uniform matrix for the fit 
 
+ddz= RadiallyNormalizedMatrix(xcoor,ycoor,coma_surf_dz,plate_radius,120)
 
+# wavefront displacement in microns
+ddwf = RadiallyNormalizedWavefrontMatrix(xcoor,ycoor,coma_surf_dz,plate_radius,120,refractive_index)
+
+#Begin Fitting
+coma_fitlist,C1 = opticspy.zernike.fitting(ddwf,12,remain2D=1,remain3D=1,barchart=1,interferogram=1)
+C1.zernikesurface(zlim=[-1,2])
 #
 #     second find the uniform deflection
 #
@@ -493,7 +516,7 @@ magfactor2 = 0.0
 
 #
 
-weight1 = 25.0  # actuator force in gr
+weight1 = 50.0  # actuator force in gr
 
 #
 # piston pressure (for weight1 gr) in mN/mm^2
@@ -524,14 +547,14 @@ print 'ppiston =', ppiston, 'mN/mm^2, a0*rad =', a0 * plate_radius, \
         ppiston, a0)
 force_centroid = force_at_centroids(press_centroid,
                                     bottom_facet_centroids, area_facets)
-plot_pressure(pmsh, 20)
+plot_pressure(pmsh, 20,plate_radius)
 
 #
 
 (bottom_pts_ids, bottom_pts_cload) = find_solid_bottom_facet_cloads(m,
         fbot, force_centroid)
 cmsh = force_at_bottom_points(m, bottom_pts_ids, bottom_pts_cload)
-plot_cload(cmsh, 20)
+plot_cload(cmsh, 20,plate_radius)
 
 #
 #      now assemble the calculix input deck and files
@@ -582,9 +605,25 @@ print result
 (dzmin_p, dzmax_p) = calculix_extreme_dz('calculix_uni_run.dat')
 
 (nn,zdata) = calculix_dz('calculix_uni_run.dat')
-(xcoor,ycoor,surf_dz) = surface_dz(P,bot_pts,zdata)
+(xcoor,ycoor,uni_surf_dz) = surface_dz(P,bot_pts,zdata)
 
-plot_dz(xcoor,ycoor,surf_dz,20.0)
+plot_dz(xcoor,ycoor,uni_surf_dz,20.0,plate_radius)
+
+# now make the fit 
+# first construct a uniform matrix for the fit 
+
+ddz= RadiallyNormalizedMatrix(xcoor,ycoor,uni_surf_dz,plate_radius,120)
+
+# calculare wavefront in microns
+ddwf = RadiallyNormalizedWavefrontMatrix(xcoor,ycoor,uni_surf_dz,plate_radius,120,refractive_index)
+#Begin second Fitting
+uni_fitlist,C2 = opticspy.zernike.fitting(ddwf,12,remain2D=1,remain3D=1,barchart=1,interferogram=1)
+C2.zernikesurface(zlim=[-3,3])
+
+lens_power = 4.0*sqrt(3.0)*uni_fitlist[4]*1.0e-6 /(plate_radius*plate_radius)/1.0e-6
+lens_power2 = (refractive_index-1.0)*2.0*abs(dzmin_p)/(plate_radius*plate_radius-dzmin_p*dzmin_p)/1.0e-3
+coma_lens_power = 4.0*sqrt(3.0)*coma_fitlist[8]*1.0e-6/(plate_radius*plate_radius)/1.0e-6*4.0
+
 
 print '*********************************************************'
 print 'extreme coma dz = ', dzmin_coma, dzmax_coma
@@ -594,9 +633,15 @@ avgc = (abs(dzmin_coma) + abs(dzmax_coma)) / 1.0
 maxdzp = abs(dzmin_p)
 print
 ratio_coma = avgc / maxdzp
+print 'coma coeff in microns = ', coma_fitlist[8], "microns" 
 print 'coma cont. ratio = ', ratio_coma
 print 'coma decrease factor = ', ratio_coma / 0.0827 * 100.0 / 2.0, '%'
 print 'coma power = ', 3.0 * ratio_coma, 'diopters'
+print 'uniform lens power = ', lens_power, 'diopters'
+print 'uniform lens power2 = ', lens_power2, 'diopters'
+print 'coma lens power = ', coma_lens_power, 'diopters'
+print 'max coma lens power = ', 2.0*coma_lens_power, 'diopters'
+
 print '*********************************************************'
 
 

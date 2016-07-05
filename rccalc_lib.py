@@ -24,7 +24,7 @@ def process_run(cmd, timeout_sec):
 
 
 
-def  plot_pressure(pm,size):
+def  plot_pressure(pm,size,r0):
     x =[]
     y = []
     z = []
@@ -36,8 +36,8 @@ def  plot_pressure(pm,size):
         y.append(pm[jj][1])
         z.append(pm[jj][3])
         
-    xi = np.linspace(-17,17,200)
-    yi = np.linspace(-17,17,200)
+    xi = np.linspace(-r0,r0,200)
+    yi = np.linspace(-r0,r0,200)
     # grid the data.
     zi = griddata((x, y), z, (xi[None,:], yi[:,None]), method='cubic')
     # contour the gridded data, plotting dots at the randomly spaced data points.
@@ -52,7 +52,7 @@ def  plot_pressure(pm,size):
     plt.show()
     return()
     
-def  plot_cload(pm,size):
+def  plot_cload(pm,size,r0):
     x =[]
     y = []
     z = []
@@ -64,8 +64,8 @@ def  plot_cload(pm,size):
         y.append(pm[jj][1])
         z.append(pm[jj][3])
         
-    xi = np.linspace(-17,17,200)
-    yi = np.linspace(-17,17,200)
+    xi = np.linspace(-r0,r0,200)
+    yi = np.linspace(-r0,r0,200)
     # grid the data.
     zi = griddata((x, y), z, (xi[None,:], yi[:,None]), method='cubic')
     # contour the gridded data, plotting dots at the randomly spaced data points.
@@ -81,7 +81,7 @@ def  plot_cload(pm,size):
     return()  
     
       
-def  plot_dz(x,y,z,size):
+def  plot_dz(x,y,z,size,r0):
    
     plt.figure(figsize=(size,size/1.25))
     # define grid.
@@ -91,8 +91,8 @@ def  plot_dz(x,y,z,size):
 #        y.append(pm[jj][1])
 #        z.append(pm[jj][3])
 #        
-    xi = np.linspace(-17,17,200)
-    yi = np.linspace(-17,17,200)
+    xi = np.linspace(-r0,r0,200)
+    yi = np.linspace(-r0,r0,200)
     # grid the data.
     zi = griddata((x, y), z, (xi[None,:], yi[:,None]), method='cubic')
     # contour the gridded data, plotting dots at the randomly spaced data points.
@@ -106,6 +106,38 @@ def  plot_dz(x,y,z,size):
     plt.title('griddata cload (%d points)' % npts)
     plt.show()
     return()    
+    
+def  RadiallyNormalizedMatrix(x,y,z,r0,N):
+    # define grid.
+    #npts = len(z)
+    xi = np.linspace(-r0,r0,N)
+    yi = np.linspace(-r0,r0,N)
+#
+    zi = griddata((x, y), z, (xi[None,:], yi[:,None]), method='cubic')
+    for i in range(0,N):
+        for j in range(0,N):
+            if xi[i]**2+yi[j]**2 >=0.85*r0*r0:
+                zi[i][j]=0
+    return (zi)   
+    
+def  RadiallyNormalizedWavefrontMatrix(x,y,z,r0,N,ri):
+    # define grid.
+    #npts = len(z)
+    xi = np.linspace(-r0,r0,N)
+    yi = np.linspace(-r0,r0,N)
+#
+    zi = griddata((x, y), z, (xi[None,:], yi[:,None]), method='cubic')
+    for i in range(0,N):
+        for j in range(0,N):
+            if xi[i]**2+yi[j]**2 >=0.85*r0*r0:
+                zi[i][j]=0
+    
+# calculate wavefront in microns 
+            
+    for i in range(0,N):
+        for j in range(0,N):
+                zi[i][j]=zi[i][j]*(ri-1.0)*1000.0          
+    return (zi)   
     
     
 #    function to make geo file
