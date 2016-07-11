@@ -10,24 +10,20 @@ from scad import *
 import math
 
 import subprocess
-import triangle.plot
 import matplotlib.pyplot as plt
 
 import numpy.ma as ma
 import numpy as np
 import sys
-import tvtk
 import os
 
 import re
 import shutil
 import time
-import shlex
+#import shlex
 import opticspy
 
-from triangle import *
 from scipy.interpolate import griddata
-from threading import Timer
 from easyprocess import EasyProcess
 from getfem import *
 
@@ -40,29 +36,65 @@ import rccalc_lib
 #
 #      Main program
 #
-
+################################################
+#   optical parameters
+#
 refractive_index = 1.47
+wavelength = 0.59e-6
 
-
+################################################
+#   material properties
+#
 matname = 'PDMS'
-E = 1.1e3  #  PDMS Young modulus (Sylgard 184)
-Nu = 0.421
+E = 2.82e3  #  PDMS Young modulus (Sylgard 184)
+Nu = 0.421  #  PDMS Poisson's ratio
+
+################################################
+#   loading force conditions
+#
+commonfactor = 1.0
+magfactor2 = 1.0
 
 #
-number_of_ribs = 32
-number_of_ribs = 16
 
-# number_of_ribs = 8
+weight1 = 70.0  # uniform actuator force in gr
+
+#
+# piston pressures (for weight1 gr) in mN/mm^2
+
+ppiston_uni = -weight1 * commonfactor * 1.0e-3 * 9.81 / (math.pi
+        * plate_radius * plate_radius) * 1.0e3
+        
+ppiston_coma = 0.0
+
+#
+#  calculate the density pressure due to radius of glycerol
+#  need pressure gradient parameter p/r (see Timoshenko,
+#  Theory of plates and shells, pg. 285)
+#
+rhog = 1260.0  # glycerol density in kg/m^3
+pres_gly = -rhog * 9.81 * plate_radius * 1.0e-3 * 1.0e-6 * 1.0e3  # in mN/mm^2
+pgmax = commonfactor * magfactor2 * pres_gly  #    maximum pressure difference to center
+
+a0_coma = pgmax / plate_radius  # coefficient for pressure gradient
+a0_uni = 0.0 # coefficent for uniform pressure
+
+liquid_weight = rhog*plate_radius*math.pi*plate_radius*plate_radius*1e-6
+
+##############################################################
+#
+#                    geometry description
+#
+
+number_of_ribs = 16
 
 plate_radius = 15.0  # mm
 plate_thickness = 1.0  # mm
 rib_width = 0.9  # mm
-rib_width = 0.95  # mm
-rib_thickness = 1.8 # mm
+
+rib_thickness = 1.0 # mm
 
 rib_length = 0.585 * plate_radius
-
-# rib_length = 0.9*plate_radius
 
 rib_radius = math.sqrt(1.0 / 5.0) * plate_radius
 
@@ -80,11 +112,8 @@ flare_angle = 360.0 / number_of_ribs / 2.0 * 3.0
 solfolder = 'solution_folder'
 fileprefix = 'rplate'
 
+#
 run_aborted = False
-
-#Z = opticspy.zernike.Coefficient(Z11=1) 
-#Z.zernikesurface()
-
 
 #
 #   make the plate here
@@ -187,6 +216,7 @@ sys.stdout.flush()
 
 stl_to_mesh_tetgen_meshing_cmd = 'tetgen.exe -pgqa2.0 ' + stl_file
 
+# impose a maximum time limit for tetgen
 pr = EasyProcess(stl_to_mesh_tetgen_meshing_cmd).call(timeout=10)
 returncode = pr.return_code
 stdoutdata = pr.stdout
@@ -199,16 +229,7 @@ print stdoutdata
 
 if status != 0:
     aborted_run = True
-
-#
-
     print 'stl to tetgen mesh failed !'
-    print
-    sys.exit('Stopping here')
-
-if status != 0:
-    aborted_run = True
-    print 'stl to tetgen mesh timeout !'
     print
     sys.exit('Stopping here')
 
@@ -344,7 +365,7 @@ fnor1 = m.normal_of_faces(fbot)
 
 #
 #   Here identify and refine the edge BC
-#   to make sure that thet are outer faces.
+#   to make sure that they are outer faces.
 #
 
 fside2 = []
@@ -399,32 +420,8 @@ bot_pts = m.pid_in_faces(fbot)
 #     first find the coma deflection
 #
 
-commonfactor = 1.0
-magfactor2 = 1.0
-
-#
-
-weight1 = 0.0  # actuator force in gr
-
-#
-# piston pressure (for weight1 gr) in mN/mm^2
-
-ppiston = -weight1 * commonfactor * 1.0e-3 * 9.8 / (math.pi
-        * plate_radius * plate_radius) * 1.0e3
-
-#
-#  calculate the density pressure due to radius of glycerol
-#  need pressure gradient parameter p/r (see Timoshenko,
-#  Theory of plates and shells, pg. 285)
-#
-
-rhog = 1260.0  # glycerol density in kg/m^3
-pres_gly = -rhog * 9.8 * plate_radius * 1.0e-3 * 1.0e-6 * 1.0e3  # in mN/mm^2
-pgmax = commonfactor * magfactor2 * pres_gly  #    maximum pressure difference to center
-a0 = pgmax / plate_radius  # coefficient for pressure gradient
-
 print 'coma loading ...'
-print 'ppiston =', ppiston, 'mN/mm^2, a0*rad =', a0 * plate_radius, \
+print 'ppiston =', ppiston_coma, 'mN/mm^2, a0*rad =', a0_coma * plate_radius, \
     'mN/mm^2'
 
 #
@@ -432,24 +429,19 @@ print 'ppiston =', ppiston, 'mN/mm^2, a0*rad =', a0 * plate_radius, \
 #
 
 (press_centroid, pmsh) = pressure_at_centroids(bottom_facet_centroids,
-        ppiston, a0)
+        ppiston_coma, a0_coma)
 force_centroid = force_at_centroids(press_centroid,
                                     bottom_facet_centroids, area_facets)
-plot_pressure(pmsh, 20,plate_radius)
+plot_pressure(pmsh, 20, plate_radius)
 
 (bottom_pts_ids, bottom_pts_cload) = find_solid_bottom_facet_cloads(m,
         fbot, force_centroid)
 cmsh = force_at_bottom_points(m, bottom_pts_ids, bottom_pts_cload)
-plot_cload(cmsh, 20, plate_radius)
+#plot_cload(cmsh, 20, plate_radius)
 
 #
 #      now assemble the calculix input deck and files
 #
-
-#matname = 'PDMS'
-#E = 1.0e3  #  PDMS Young modulus (Sylgard 184)
-#Nu = 0.3
-
 calculix_input_deck = 'calculix_coma_run.inp'
 sys.stdout.write('assembling coma input deck ... ')
 sys.stdout.flush()
@@ -475,8 +467,6 @@ sys.stdout.write('running calculix ... ')
 sys.stdout.flush()
 calculix_solve_cmd = 'ccx -i ' + calculix_jobname
 
-# p = subprocess.call(calculix_solve_cmd,shell=True)
-
 p = subprocess.Popen(calculix_solve_cmd, shell=True,
                      stdout=subprocess.PIPE)
 result = p.communicate()[0]
@@ -496,7 +486,7 @@ print result
 
 plot_dz(xcoor,ycoor,coma_surf_dz,20.0,plate_radius)
 
-# now make the fit 
+# now make the Zernike coefficient fit 
 # first construct a uniform matrix for the fit 
 
 ddz= RadiallyNormalizedMatrix(xcoor,ycoor,coma_surf_dz,plate_radius,120)
@@ -507,36 +497,15 @@ ddwf = RadiallyNormalizedWavefrontMatrix(xcoor,ycoor,coma_surf_dz,plate_radius,1
 #Begin Fitting
 coma_fitlist,C1 = opticspy.zernike.fitting(ddwf,12,remain2D=1,remain3D=1,barchart=1,interferogram=1)
 C1.zernikesurface(zlim=[-1,2])
+
+###################################################################
 #
-#     second find the uniform deflection
+#     Next find the uniform deflection
 #
-
-commonfactor = 1.0
-magfactor2 = 0.0
-
-#
-
-weight1 = 50.0  # actuator force in gr
-
-#
-# piston pressure (for weight1 gr) in mN/mm^2
-
-ppiston = -weight1 * commonfactor * 1.0e-3 * 9.8 / (math.pi
-        * plate_radius * plate_radius) * 1.0e3
-
-#
-#  calculate the density pressure due to radius of glycerol
-#  need pressure gradient parameter p/r (see Timoshenko,
-#  Theory of plates and shells, pg. 285)
-#
-
-rhog = 1260.0  # glycerol density in kg/m^3
-pres_gly = -rhog * 9.8 * plate_radius * 1.0e-3 * 1.0e-6 * 1.0e3  # in mN/mm^2
-pgmax = commonfactor * magfactor2 * pres_gly  #    maximum pressure difference to center
-a0 = pgmax / plate_radius  # coefficient for pressure gradient
+###################################################################
 
 print 'uniform loading ...'
-print 'ppiston =', ppiston, 'mN/mm^2, a0*rad =', a0 * plate_radius, \
+print 'ppiston =', ppiston_uni, 'mN/mm^2, a0*rad =', a0_uni * plate_radius, \
     'mN/mm^2'
 
 #
@@ -544,7 +513,7 @@ print 'ppiston =', ppiston, 'mN/mm^2, a0*rad =', a0 * plate_radius, \
 #
 
 (press_centroid, pmsh) = pressure_at_centroids(bottom_facet_centroids,
-        ppiston, a0)
+        ppiston_uni, a0_uni)
 force_centroid = force_at_centroids(press_centroid,
                                     bottom_facet_centroids, area_facets)
 plot_pressure(pmsh, 20,plate_radius)
@@ -554,16 +523,11 @@ plot_pressure(pmsh, 20,plate_radius)
 (bottom_pts_ids, bottom_pts_cload) = find_solid_bottom_facet_cloads(m,
         fbot, force_centroid)
 cmsh = force_at_bottom_points(m, bottom_pts_ids, bottom_pts_cload)
-plot_cload(cmsh, 20,plate_radius)
+#plot_cload(cmsh, 20,plate_radius)
 
 #
 #      now assemble the calculix input deck and files
 #
-
-#matname = 'PDMS'
-#E = 1.0e3  # mN/mm^2 PDMS Young modulus (Sylgard 184)
-#Nu = 0.3
-
 #
 
 calculix_input_deck = 'calculix_uni_run.inp'
@@ -600,6 +564,9 @@ print 'done\n'
 
 print result
 
+# this is the deflection ratio (coma/uni) for 1 mm plate
+coma_uniratio_1mm = 0.0396824882006
+
 # find the extreme dz displacement for uniform pressure
 
 (dzmin_p, dzmax_p) = calculix_extreme_dz('calculix_uni_run.dat')
@@ -624,27 +591,33 @@ lens_power = 4.0*sqrt(3.0)*uni_fitlist[4]*1.0e-6 /(plate_radius*plate_radius)/1.
 lens_power2 = (refractive_index-1.0)*2.0*abs(dzmin_p)/(plate_radius*plate_radius-dzmin_p*dzmin_p)/1.0e-3
 coma_lens_power = 4.0*sqrt(3.0)*coma_fitlist[8]*1.0e-6/(plate_radius*plate_radius)/1.0e-6*4.0
 
-
+print
 print '*********************************************************'
-print 'extreme coma dz = ', dzmin_coma, dzmax_coma
-print 'extreme uniform dz = ', dzmin_p, dzmax_p
+print '*                                                       *'
+print '*                     Final Results                     *'
+print '*                                                       *'
+print '*********************************************************'
+print 'unif. actuation force  = ', weight1, "gr"
+print 'liquid column force    = ', liquid_weight, "gr"
+print '*********************************************************'
+print 'extreme coma dz        = ', dzmin_coma, ",",dzmax_coma, "mm"
+print 'extreme uniform dz     = ', dzmin_p, ",", dzmax_p, "mm"
 
 avgc = (abs(dzmin_coma) + abs(dzmax_coma)) / 1.0
 maxdzp = abs(dzmin_p)
-print
+#print
 ratio_coma = avgc / maxdzp
-print 'coma coeff in microns = ', coma_fitlist[8], "microns" 
-print 'coma cont. ratio = ', ratio_coma
-print 'coma decrease factor = ', ratio_coma / 0.0827 * 100.0 / 2.0, '%'
-#print 'coma power = ', 3.0 * ratio_coma, 'diopters'
-print 'uniform lens power = ', lens_power, 'diopters'
-print 'uniform lens power2 = ', lens_power2, 'diopters'
-print 'coma lens power = ', coma_lens_power, 'diopters'
-print 'max coma lens power = ', 2.0*coma_lens_power, 'diopters'
+#####################################################################
+print 'coma coeff in microns  = ', coma_fitlist[8], "microns" 
+print 'coma cont. ratio       = ', ratio_coma
+print 'coma decrease factor   = ', ratio_coma / coma_uniratio_1mm * 100.0, '%'
+print 'uniform lens power     = ', lens_power, 'diopters'
+print 'uniform lens power2    = ', lens_power2, 'diopters'
+print 'appr. coma lens power  = ', coma_lens_power, 'diopters'
+print 'max coma lens power    = ', 2.0*coma_lens_power, 'diopters'
+print 'coma/uni power         = ', 2.0*coma_lens_power/lens_power
 
 print '*********************************************************'
-
-
 
 
 sys.exit('Stopping here')
