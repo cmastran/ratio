@@ -139,6 +139,25 @@ def  RadiallyNormalizedWavefrontMatrix(x,y,z,r0,N,ri):
                 zi[i][j]=zi[i][j]*(ri-1.0)*1000.0          
     return (zi)   
     
+def  VignettedRadiallyNormalizedWavefrontMatrix(x,y,z,r0,rv,N,ri):
+    # define grid.
+    #npts = len(z)
+    xi = np.linspace(-rv,rv,N)
+    yi = np.linspace(-rv,rv,N)
+#
+    zi = griddata((x, y), z, (xi[None,:], yi[:,None]), method='cubic')
+    for i in range(0,N):
+        for j in range(0,N):
+            if xi[i]**2+yi[j]**2 >=0.85*rv*rv:
+                zi[i][j]=0
+    
+# calculate wavefront in microns 
+            
+    for i in range(0,N):
+        for j in range(0,N):
+                zi[i][j]=zi[i][j]*(ri-1.0)*1000.0          
+    return (zi)      
+    
     
 #    function to make geo file
 #

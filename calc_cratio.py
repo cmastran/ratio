@@ -41,6 +41,7 @@ import rccalc_lib
 #
 refractive_index = 1.47
 wavelength = 0.59e-6
+vignetting_radius = 12.0 # mm in sensor
 
 ################################################
 #   material properties
@@ -493,10 +494,15 @@ ddz= RadiallyNormalizedMatrix(xcoor,ycoor,coma_surf_dz,plate_radius,120)
 
 # wavefront displacement in microns
 ddwf = RadiallyNormalizedWavefrontMatrix(xcoor,ycoor,coma_surf_dz,plate_radius,120,refractive_index)
+ddwf_vig = VignettedRadiallyNormalizedWavefrontMatrix(xcoor,ycoor,coma_surf_dz,plate_radius,vignetting_radius,120,refractive_index)
 
 #Begin Fitting
 coma_fitlist,C1 = opticspy.zernike.fitting(ddwf,12,remain2D=1,remain3D=1,barchart=1,interferogram=1)
 C1.zernikesurface(zlim=[-1,2])
+
+#Begin Vignetted Fitting
+coma_fitlist_vig,C1v = opticspy.zernike.fitting(ddwf_vig,12,remain2D=1,remain3D=1,barchart=1,interferogram=1)
+C1v.zernikesurface(zlim=[-1,2])
 
 ###################################################################
 #
@@ -600,6 +606,9 @@ print '*********************************************************'
 print 'unif. actuation force  = ', weight1, "gr"
 print 'liquid column force    = ', liquid_weight, "gr"
 print '*********************************************************'
+print 'plate radius           = ', plate_radius, "mm"
+print 'plate thickness        = ', plate_thickness, "mm"
+print 'vignetting radius      = ', vignetting_radius, "mm"
 print 'extreme coma dz        = ', dzmin_coma, ",",dzmax_coma, "mm"
 print 'extreme uniform dz     = ', dzmin_p, ",", dzmax_p, "mm"
 
@@ -608,7 +617,8 @@ maxdzp = abs(dzmin_p)
 #print
 ratio_coma = avgc / maxdzp
 #####################################################################
-print 'coma coeff in microns  = ', coma_fitlist[8], "microns" 
+print 'coma coeff in microns  = ', coma_fitlist[8], "microns"
+print 'vig. coma coeff        = ', coma_fitlist_vig[8], "microns"  
 print 'coma cont. ratio       = ', ratio_coma
 print 'coma decrease factor   = ', ratio_coma / coma_uniratio_1mm * 100.0, '%'
 print 'uniform lens power     = ', lens_power, 'diopters'
